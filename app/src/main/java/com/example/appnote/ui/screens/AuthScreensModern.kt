@@ -25,6 +25,7 @@ import com.example.appnote.ui.theme.AccentOrange
 import com.example.appnote.ui.theme.LightBackground
 import com.example.appnote.ui.theme.PrimaryBlue
 import com.example.appnote.ui.theme.SecondaryPurple
+import com.example.appnote.util.PasswordValidator
 import com.example.appnote.viewmodel.AuthViewModel
 
 @Composable
@@ -368,6 +369,21 @@ fun ModernRegisterScreen(
                         )
                     )
 
+                    // Password strength indicator
+                    if (password.isNotEmpty()) {
+                        val strengthMessage = PasswordValidator.getPasswordStrengthMessage(password)
+                        val isStrong = PasswordValidator.isStrongPassword(password)
+                        val textColor = if (isStrong) Color(0xFF4CAF50) else Color(0xFFFF9800)
+                        
+                        Text(
+                            text = strengthMessage,
+                            fontSize = 12.sp,
+                            color = textColor,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(start = 8.dp, top = 4.dp)
+                        )
+                    }
+
                     OutlinedTextField(
                         value = confirmPassword,
                         onValueChange = { confirmPassword = it },
@@ -406,9 +422,7 @@ fun ModernRegisterScreen(
             // Register Button
             Button(
                 onClick = {
-                    if (email.isNotEmpty() && password.isNotEmpty() && displayName.isNotEmpty() && password == confirmPassword && userId.isNotEmpty()) {
-                        viewModel.register(userId, email, password, displayName)
-                    }
+                    viewModel.register(userId, email, password, confirmPassword, displayName)
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -417,7 +431,7 @@ fun ModernRegisterScreen(
                     containerColor = SecondaryPurple
                 ),
                 shape = RoundedCornerShape(12.dp),
-                enabled = !isLoading && email.isNotEmpty() && password.isNotEmpty() && displayName.isNotEmpty() && password == confirmPassword && userId.isNotEmpty()
+                enabled = !isLoading && email.isNotEmpty() && password.isNotEmpty() && displayName.isNotEmpty() && password == confirmPassword && userId.isNotEmpty() && PasswordValidator.isStrongPassword(password)
             ) {
                 if (isLoading) {
                     CircularProgressIndicator(

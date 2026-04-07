@@ -5,13 +5,15 @@ import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.BorderStroke
 import coil.compose.AsyncImage
 import com.example.appnote.model.Note
 import com.example.appnote.ui.theme.AccentOrange
@@ -48,13 +51,27 @@ fun AddEditNoteScreen(
     var fileNameDisplay by remember { mutableStateOf("") }
     var isUploadingImage by remember { mutableStateOf(false) }
     var isUploadingFile by remember { mutableStateOf(false) }
+    
+    // For admin assigning note to user
+    var selectedUserId by remember { mutableStateOf<String?>(null) }
+    var showUserDropdown by remember { mutableStateOf(false) }
 
     val isLoading by noteViewModel.isLoading.collectAsState()
     val error by noteViewModel.error.collectAsState()
     val currentUser by authViewModel.currentUser.collectAsState()
+    val currentUserRole by noteViewModel.currentUserRole.collectAsState()
+    val allUsers by authViewModel.allUsers.collectAsState()
     val context = LocalContext.current
+    val isAdmin = currentUserRole == "admin"
 
     val scope = rememberCoroutineScope()
+    
+    // Load users if admin
+    LaunchedEffect(isAdmin) {
+        if (isAdmin && allUsers.isEmpty()) {
+            authViewModel.loadAllUsers()
+        }
+    }
 
     // Helper function to get file name from Uri
     fun getFileNameFromUri(uri: Uri): String {
@@ -82,7 +99,7 @@ fun AddEditNoteScreen(
             isUploadingImage = true
             scope.launch {
                 // Attempt upload silently - no error notification if fails
-                noteViewModel.uploadImage(uri) { success ->
+                noteViewModel.uploadImage(uri, context) { success ->
                     isUploadingImage = false
                 }
             }
@@ -99,7 +116,7 @@ fun AddEditNoteScreen(
             isUploadingFile = true
             scope.launch {
                 // Attempt upload silently - no error notification if fails
-                noteViewModel.uploadFile(uri) { success ->
+                noteViewModel.uploadFile(uri, context) { success ->
                     isUploadingFile = false
                 }
             }
@@ -112,7 +129,7 @@ fun AddEditNoteScreen(
                 title = { Text(if (note == null) "New Note" else "Edit Note") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -256,6 +273,112 @@ fun AddEditNoteScreen(
                 }
             }
 
+            // Assign to User Section - For Admin Only
+            if (isAdmin && note == null) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text("👤 Assign to User (Optional)", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        
+                        Box(
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            OutlinedButton(
+                                onClick = { showUserDropdown = !showUserDropdown },
+                                modifier = Modifier.fillMaxWidth(),
+                                border = BorderStroke(1.dp, PrimaryBlue)
+                            ) {
+                                Text(
+                                    if (selectedUserId == null) "Select user..." else {
+                                        val user = allUsers.find { it.uid == selectedUserId }
+                                        user?.displayName ?: "Unknown"
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Start
+                                )
+                                Icon(Icons.Filled.ArrowDropDown, contentDescription = "Dropdown")
+                            }
+                            
+                            if (showUserDropdown) {
+                                DropdownMenu(
+                                    expanded = showUserDropdown,
+                                    onDismissRequest = { showUserDropdown = false },
+                                    modifier = Modifier.fillMaxWidth(0.9f)
+                                ) {
+                                    // Add option to keep as personal note
+                                    DropdownMenuItem(
+                                        text = { Text("My Personal Note") },
+                                        onClick = {
+                                            selectedUserId = null
+                                            showUserDropdown = false
+                                        }
+                                    )
+                                    
+                                    HorizontalDivider()
+                                    
+                                    // List all users except current admin
+                                    allUsers.forEach { user ->
+                                        if (user.uid != currentUser?.uid) {
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Column {
+                                                        Text(user.displayName, fontWeight = FontWeight.Bold)
+                                                        Text(user.email, fontSize = 12.sp, color = Color.Gray)
+                                                    }
+                                                },
+                                                onClick = {
+                                                    selectedUserId = user.uid
+                                                    showUserDropdown = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        if (selectedUserId != null) {
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = Color(0xFFFFE0B2),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    "👁️ This user will see the note as read-only",
+                                    fontSize = 12.sp,
+                                    color = Color(0xFFF57C00),
+                                    modifier = Modifier.padding(12.dp),
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        } else if (isAdmin && note == null) {
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = Color(0xFFC8E6C9),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    "🔗 This note will be shared with all users (read-only view)",
+                                    fontSize = 12.sp,
+                                    color = Color(0xFF2E7D32),
+                                    modifier = Modifier.padding(12.dp),
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             // File Section - Modern Design
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -334,13 +457,21 @@ fun AddEditNoteScreen(
                     }
 
                     if (note == null) {
+                        // Determine userId and isReadOnly
+                        val noteUserId = selectedUserId ?: currentUser?.uid ?: ""
+                        val isReadOnly = selectedUserId != null  // Read-only if assigned to another user
+                        val isSharedWithAll = selectedUserId == null  // Share with all if not assigned to specific user
+                        
                         val newNote = Note(
                             title = title,
                             description = description,
-                            userId = currentUser?.uid ?: "",
+                            userId = noteUserId,
                             imageUrl = if (selectedImageUri != null) selectedImageUri.toString() else "",
                             fileUrl = if (selectedFileUri != null) selectedFileUri.toString() else "",
-                            fileName = fileNameDisplay
+                            fileName = fileNameDisplay,
+                            createdBy = currentUser?.uid ?: "",
+                            isReadOnly = isReadOnly,
+                            isSharedWithAll = isSharedWithAll
                         )
                         noteViewModel.addNote(newNote)
                     } else {

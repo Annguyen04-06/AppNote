@@ -11,6 +11,7 @@ import com.example.appnote.ui.screens.AddEditNoteScreen
 import com.example.appnote.ui.screens.ModernLoginScreen
 import com.example.appnote.ui.screens.ModernNotesListScreen
 import com.example.appnote.ui.screens.ModernRegisterScreen
+import com.example.appnote.ui.screens.UserManagementScreen
 import com.example.appnote.viewmodel.AuthViewModel
 import com.example.appnote.viewmodel.NoteViewModel
 
@@ -52,7 +53,9 @@ fun AppNavigation(
             ModernRegisterScreen(
                 viewModel = authViewModel,
                 onRegisterSuccess = {
-                    navController.navigate("notes_list") {
+                    // Logout after successful registration to force login
+                    authViewModel.logout()
+                    navController.navigate("login") {
                         popUpTo("register") { inclusive = true }
                     }
                 },
@@ -77,6 +80,9 @@ fun AppNavigation(
                     navController.navigate("login") {
                         popUpTo("notes_list") { inclusive = true }
                     }
+                },
+                onManageUsers = {
+                    navController.navigate("user_management")
                 }
             )
         }
@@ -107,6 +113,15 @@ fun AppNavigation(
                     }
                 )
             }
+        }
+
+        composable("user_management") {
+            UserManagementScreen(
+                authViewModel = authViewModel,
+                onBack = {
+                    navController.popBackStack()
+                }
+            )
         }
     }
 }

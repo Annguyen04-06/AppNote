@@ -1,0 +1,23 @@
+{
+  "rules": {
+    "notes": {
+      "$noteId": {
+        ".read": "auth != null && (root.child('notes').child($noteId).child('userId').val() === auth.uid || root.child('notes').child($noteId).child('isSharedWithAll').val() === true)",
+        ".write": "auth != null && root.child('notes').child($noteId).child('userId').val() === auth.uid"
+      },
+      ".indexOn": ["userId"]
+    },
+    "userAuth": {
+      "$userId": {
+        ".read": "auth != null && auth.uid === $userId",
+        ".write": "auth != null && auth.uid === $userId"
+      }
+    },
+    "users": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "false"
+      }
+    }
+  }
+}

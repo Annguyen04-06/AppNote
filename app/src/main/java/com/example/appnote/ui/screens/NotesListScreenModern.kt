@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -38,12 +39,15 @@ fun ModernNotesListScreen(
     noteViewModel: NoteViewModel,
     onAddNote: () -> Unit,
     onEditNote: (Note) -> Unit,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    onManageUsers: () -> Unit = {}
 ) {
     val notes by noteViewModel.notes.collectAsState()
     val isLoading by noteViewModel.isLoading.collectAsState()
     val error by noteViewModel.error.collectAsState()
     val currentUser by authViewModel.currentUser.collectAsState()
+    val currentUserRole by noteViewModel.currentUserRole.collectAsState()
+    val isAdmin = currentUserRole == "admin"
 
     LaunchedEffect(Unit) {
         noteViewModel.loadUserNotes()
@@ -54,23 +58,54 @@ fun ModernNotesListScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text(
-                            "Notes",
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                        Text(
-                            currentUser?.displayName ?: "User",
-                            fontSize = 12.sp,
-                            color = Color.White.copy(alpha = 0.8f)
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "Notes",
+                                    fontSize = 24.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        currentUser?.displayName ?: "User",
+                                        fontSize = 12.sp,
+                                        color = Color.White.copy(alpha = 0.8f)
+                                    )
+                                    Surface(
+                                        shape = RoundedCornerShape(4.dp),
+                                        color = if (isAdmin) Color(0xFFFF6B6B) else Color(0xFF4CAF50),
+                                        modifier = Modifier.padding(top = 2.dp)
+                                    ) {
+                                        Text(
+                                            if (isAdmin) "Admin" else "User",
+                                            fontSize = 10.sp,
+                                            color = Color.White,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = PrimaryBlue
                 ),
                 actions = {
+                    if (isAdmin) {
+                        IconButton(onClick = onManageUsers) {
+                            Icon(Icons.Filled.Settings, contentDescription = "Manage Users", tint = Color.White)
+                        }
+                    }
                     IconButton(onClick = {
                         authViewModel.logout()
                         onLogout()
@@ -155,7 +190,9 @@ fun ModernNotesListScreen(
                         ModernNoteCard(
                             note = note,
                             onEdit = { onEditNote(note) },
-                            onDelete = { noteViewModel.deleteNote(note.id) }
+                            onDelete = { noteViewModel.deleteNote(note.id) },
+                            isAdmin = isAdmin,
+                            currentUserId = currentUser?.uid ?: ""
                         )
                     }
                     item { Spacer(modifier = Modifier.height(80.dp)) }
@@ -169,14 +206,20 @@ fun ModernNotesListScreen(
 fun ModernNoteCard(
     note: Note,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    isAdmin: Boolean = false,
+    currentUserId: String = ""
 ) {
     var isHovered by remember { mutableStateOf(false) }
+    val canEdit = isAdmin || (note.userId == currentUserId && !note.isReadOnly)
+    val canDelete = isAdmin || (note.userId == currentUserId && !note.isReadOnly)
+    val isReadOnly = note.isReadOnly && note.userId == currentUserId
+    val isSharedNote = note.isSharedWithAll && note.userId != currentUserId
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onEdit() }
+            .clickable(enabled = canEdit) { onEdit() }
             .background(
                 color = Color.White,
                 shape = RoundedCornerShape(16.dp)
@@ -243,6 +286,53 @@ fun ModernNoteCard(
                                 )
                             }
                         }
+                        
+                        if (isAdmin && note.userId != currentUserId) {
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = Color(0xFFE3F2FD),
+                                modifier = Modifier.padding(horizontal = 4.dp)
+                            ) {
+                                Text(
+                                    text = "👤 User: ${note.userId.take(8)}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = PrimaryBlue,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+                        
+                        if (isSharedNote) {
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = Color(0xFFC8E6C9),
+                                modifier = Modifier.padding(horizontal = 4.dp)
+                            ) {
+                                Text(
+                                    text = "🔗 Shared by Admin",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color(0xFF2E7D32),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                        
+                        if (isReadOnly) {
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = Color(0xFFFFE0B2),
+                                modifier = Modifier.padding(horizontal = 4.dp)
+                            ) {
+                                Text(
+                                    text = "👁️ Read-only",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color(0xFFF57C00),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -250,28 +340,32 @@ fun ModernNoteCard(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     modifier = Modifier.padding(start = 8.dp)
                 ) {
-                    IconButton(
-                        onClick = onEdit,
-                        modifier = Modifier
-                            .size(40.dp)
-                            .background(
-                                color = Color(0xFFF0F0F0),
-                                shape = RoundedCornerShape(8.dp)
-                            )
-                    ) {
-                        Icon(Icons.Filled.Edit, contentDescription = "Edit", tint = PrimaryBlue, modifier = Modifier.size(20.dp))
+                    if (canEdit) {
+                        IconButton(
+                            onClick = onEdit,
+                            modifier = Modifier
+                                .size(40.dp)
+                                .background(
+                                    color = Color(0xFFF0F0F0),
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                        ) {
+                            Icon(Icons.Filled.Edit, contentDescription = "Edit", tint = PrimaryBlue, modifier = Modifier.size(20.dp))
+                        }
                     }
 
-                    IconButton(
-                        onClick = onDelete,
-                        modifier = Modifier
-                            .size(40.dp)
-                            .background(
-                                color = Color(0xFFFFEBEE),
-                                shape = RoundedCornerShape(8.dp)
-                            )
-                    ) {
-                        Icon(Icons.Filled.Delete, contentDescription = "Delete", tint = Color(0xFFD32F2F), modifier = Modifier.size(20.dp))
+                    if (canDelete) {
+                        IconButton(
+                            onClick = onDelete,
+                            modifier = Modifier
+                                .size(40.dp)
+                                .background(
+                                    color = Color(0xFFFFEBEE),
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                        ) {
+                            Icon(Icons.Filled.Delete, contentDescription = "Delete", tint = Color(0xFFD32F2F), modifier = Modifier.size(20.dp))
+                        }
                     }
                 }
             }
